@@ -66,7 +66,10 @@ Groove:
 
 Vocal:
 - max 2 lines
-- tone + technique + phrasing
+- MUST describe vocal characteristics using technical terms only
+- MUST include: tone, technique, phrasing
+- MUST NOT include any artist names
+- MUST NOT reference any real person
 
 Mood:
 - 1 short line
@@ -78,9 +81,12 @@ STYLE GUIDE:
 - Separate ideas with commas
 - Avoid full sentences
 - Be concise and dense
+- If any artist name appears in the output, it MUST be replaced with descriptive musical characteristics
 
 LANGUAGE:
 
-- Title in Chinese
-- Prompt in English
-- Keep names unchanged
+- If {language} is "中文" or "Chinese", please provide the entire output in Chinese (including Title and all analysis sections).
+- If {language} is "英文" or "English", please provide the entire output in English (Title can remain in Chinese as specified).
+- Otherwise, Title in Chinese, Prompt in English.
+- IMPORTANT: DO NOT translate the original song name ({songName}) in the Title or any other section. Keep it exactly as provided in the input.
+- Keep other names (artists, etc.) unchanged.

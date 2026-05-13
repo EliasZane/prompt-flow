@@ -1,10 +1,15 @@
 package com.promptflow.workflow.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.promptflow.common.exception.BusinessException;
 import com.promptflow.common.result.Result;
+import com.promptflow.common.utils.JsonUtils;
 import com.promptflow.template.model.config.PromptConfig;
 import com.promptflow.template.model.entity.TemplateEntity;
 import com.promptflow.template.service.TemplateService;
+import com.promptflow.user.model.entity.UserEntity;
+import com.promptflow.user.service.UserHistoryService;
+import com.promptflow.user.service.UserService;
 import com.promptflow.workflow.ai.AiClientService;
 import com.promptflow.workflow.mapper.WorkflowRunMapper;
 import com.promptflow.workflow.model.dto.WorkflowRunDTO;
@@ -14,13 +19,17 @@ import com.promptflow.workflow.model.vo.WorkflowRunVO;
 import com.promptflow.workflow.service.WorkflowService;
 import com.promptflow.workflow.utils.PromptBuilder;
 import com.promptflow.workflow.utils.PromptTemplateLoader;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Slf4j
 @Service
 public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, WorkflowRunEntity> implements WorkflowService {
 
@@ -65,10 +74,27 @@ public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, Workflow
     private PromptBuilder promptBuilder;
     @Autowired
     private AiClientService aiClientService;
+    @Autowired
+    private UserHistoryService userHistoryService;
+    @Autowired
+    private UserService userService;
+    @Autowired
+    private com.promptflow.user.service.MembershipService membershipService;
 
     @Override
     @Transactional
     public WorkflowRunVO runWorkflow(WorkflowRunDTO workflowRunDTO) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        UserEntity currentUser = userService.findByUsername(username);
+        if (currentUser == null) {
+            throw new BusinessException("用户未登录或不存在");
+        }
+
+        // 检查次数
+        if (currentUser.getRemainingCount() <= 0) {
+            throw new BusinessException("生成次数已用完，请充值");
+        }
+
         WorkflowRunVO workflowRunVO = new WorkflowRunVO();
         WorkflowRunEntity workflowRunEntity = new WorkflowRunEntity();
         workflowRunEntity.setRunStatus("RUNNING");
@@ -118,6 +144,9 @@ public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, Workflow
             workflowRunEntity.setUpdatedAt(LocalDateTime.now());
             updateById(workflowRunEntity);
 
+            // 扣减次数
+            membershipService.deductQuota(currentUser.getId(), workflowRunEntity.getId());
+
             // 10. 返回 runId、runStatus、result、extra
             workflowRunVO.setRunId(workflowRunEntity.getId());
             workflowRunVO.setTemplateCode(workflowRunEntity.getTemplateCode());
@@ -125,6 +154,14 @@ public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, Workflow
             workflowRunVO.setResult(structuredResult);
             workflowRunVO.setExtra(extraData);
             workflowRunVO.setCreatedAt(workflowRunEntity.getCreatedAt());
+
+            // 11. 保存用户历史记录
+            try {
+                saveUserHistoryRecord(template, workflowRunDTO, structuredResult);
+            } catch (Exception e) {
+                // 历史记录保存失败不影响主流程
+                log.error("Failed to save user history", e);
+            }
 
         } catch (Exception e) {
             // 记录错误信息
@@ -176,6 +213,10 @@ public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, Workflow
     private WorkflowResultVO wrapResult(Map<String, String> parsedResult, Map<String, Object> inputData) {
         WorkflowResultVO vo = new WorkflowResultVO();
 
+        // 0. 获取语言偏好
+        String language = getInputValue(inputData, "language", "lang");
+        boolean isChinese = language != null && (language.contains("中") || language.equalsIgnoreCase("chinese"));
+
         // 1. 提取 AI 生成的字段 (作为参考或直接使用)
         String aiTitle = findAndRemove(parsedResult, "title", "标题", "推荐视频标题");
         String aiCoverText = findAndRemove(parsedResult, "coverText", "封面文案", "封面");
@@ -198,7 +239,15 @@ public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, Workflow
         vo.setSuggestion(aiSuggestion != null ? aiSuggestion : generateSuggestion(style, mood, tempo));
 
         // 6. 设置标题
-        vo.setTitle(aiTitle != null ? aiTitle : (songName != null ? "把这首歌改成" + style + "翻唱，氛围感直接拉满" : "AI 音乐翻唱方案"));
+        if (aiTitle != null) {
+            vo.setTitle(aiTitle);
+        } else {
+            if (songName != null) {
+                vo.setTitle(isChinese ? "把这首《" + songName + "》改成" + style + "翻唱，氛围感直接拉满" : "Transform \"" + songName + "\" into " + style + " cover, full of atmosphere");
+            } else {
+                vo.setTitle(isChinese ? "AI 音乐翻唱方案" : "AI Music Cover Plan");
+            }
+        }
 
         // 7. 剩余的所有字段放入 prompt 对象中
         vo.setPrompt(new HashMap<>(parsedResult));
@@ -361,6 +410,32 @@ public class WorkflowServiceImpl extends ServiceImpl<WorkflowRunMapper, Workflow
 
         suggestion.append("。");
         return suggestion.toString();
+    }
+
+    private void saveUserHistoryRecord(TemplateEntity template, WorkflowRunDTO workflowRunDTO, WorkflowResultVO structuredResult) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (username == null || "anonymousUser".equals(username)) {
+            return;
+        }
+
+        UserEntity user = userService.findByUsername(username);
+        if (user == null) {
+            return;
+        }
+
+        String tag = "";
+        if (!CollectionUtils.isEmpty(structuredResult.getTags())) {
+            tag = structuredResult.getTags().get(0);
+        }
+
+        userHistoryService.saveUserHistory(
+                user.getId(),
+                template.getId(),
+                template.getTemplateCode(),
+                tag,
+                JsonUtils.toJson(workflowRunDTO.getInputData()),
+                JsonUtils.toJson(structuredResult)
+        );
     }
 
     private String findAndRemove(Map<String, String> map, String... keys) {

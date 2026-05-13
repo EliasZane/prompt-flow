@@ -28,8 +28,13 @@ export interface FormField {
   defaultValue?: any
   options?: OptionItem[]
   icon?: string
+  multiple?: boolean
+  maxSelect?: number
   min?: number
   max?: number
+  step?: number
+  unit?: string
+  marks?: { label: string; value: number }[]
 }
 
 export interface TemplateDetail extends Template {

@@ -18,4 +18,23 @@ public class JsonUtils {
         }
         return OBJECT_MAPPER.convertValue(fromValue, toValueType);
     }
+
+    public static String toJson(Object value) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new RuntimeException("JSON serialization error", e);
+        }
+    }
+
+    public static <T> T parse(String json, Class<T> clazz) {
+        if (json == null || json.isEmpty()) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, clazz);
+        } catch (Exception e) {
+            throw new RuntimeException("JSON parsing error", e);
+        }
+    }
 }

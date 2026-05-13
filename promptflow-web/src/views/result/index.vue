@@ -10,13 +10,16 @@ const props = defineProps<{
     taskId?: string | number
     templateCode?: string
     inputData?: Record<string, any>
+    historyData?: any
   }
 }>()
 
 const loading = ref(true)
+const isHistoryMode = ref(false)
 const resultData = ref<WorkflowResult | null>(null)
 const animationFinished = ref(false)
 const errorType = ref<'NONE' | 'TIMEOUT' | 'FAILURE'>('NONE')
+const errorMessage = ref('')
 const pollCount = ref(0)
 const MAX_POLLS = 20
 
@@ -104,9 +107,10 @@ const fetchExistingResult = async (id: string | number) => {
     const data = await getWorkflowRunDetail(id)
     resultData.value = data
     loading.value = false
-  } catch (error) {
+  } catch (error: any) {
     console.error('获取结果失败:', error)
     errorType.value = 'FAILURE'
+    errorMessage.value = error.message || '获取结果失败，请稍后重试'
     loading.value = false
   }
 }
@@ -115,6 +119,7 @@ const fetchExistingResult = async (id: string | number) => {
 const executeNewWorkflow = async (code: string, input: Record<string, any>) => {
   try {
     errorType.value = 'NONE'
+    errorMessage.value = ''
     startStepAnimation()
     
     // 2. 调用真实接口获取 taskId (runId)
@@ -129,21 +134,43 @@ const executeNewWorkflow = async (code: string, input: Record<string, any>) => {
     } else {
       throw new Error('No runId returned')
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('执行失败:', error)
     if (animationTimer) clearInterval(animationTimer)
     if (pollTimer) clearInterval(pollTimer)
     errorType.value = 'FAILURE'
+    errorMessage.value = error.message || '生成失败，请稍后重试'
     loading.value = false
   }
 }
 
 onMounted(() => {
   const p = props.params
-  if (p?.templateCode && p?.inputData) {
-    executeNewWorkflow(p.templateCode, p.inputData)
-  } else if (p?.taskId) {
-    fetchExistingResult(p.taskId)
+  // 兼容处理：支持直接在 params 下或在 params.params 下
+  const historyData = p?.historyData || (p as any)?.params?.historyData
+  const taskId = p?.taskId || (p as any)?.params?.taskId
+  const templateCode = p?.templateCode || (p as any)?.params?.templateCode
+  const inputData = p?.inputData || (p as any)?.params?.inputData
+
+  if (historyData) {
+    // 如果直接传递了历史数据，适配为 WorkflowResult 格式展示
+    isHistoryMode.value = true
+    const history = historyData
+    resultData.value = {
+      runId: history.id,
+      templateId: history.templateId,
+      templateCode: history.templateCode,
+      runStatus: 'SUCCESS',
+      createdAt: history.createdAt,
+      inputData: history.inputData,
+      result: history.outputData,
+      extra: {}
+    }
+    loading.value = false
+  } else if (templateCode && inputData) {
+    executeNewWorkflow(templateCode, inputData)
+  } else if (taskId) {
+    fetchExistingResult(taskId)
   } else {
     loading.value = false
   }
@@ -155,8 +182,9 @@ onUnmounted(() => {
 })
 
 const handleRetry = () => {
-  const templateCode = props.params?.templateCode || resultData.value?.templateCode
-  const inputData = props.params?.inputData
+  const p = props.params
+  const templateCode = p?.templateCode || (p as any)?.params?.templateCode || resultData.value?.templateCode
+  const inputData = p?.inputData || (p as any)?.params?.inputData || resultData.value?.inputData
 
   if (templateCode && inputData) {
     loading.value = true
@@ -224,6 +252,8 @@ const handleBackToTemplate = () => {
       <div class="result-display-layout">
         <ResultPanel 
           :content="resultData.result"
+          :input-data="resultData.inputData"
+          :show-status="!isHistoryMode"
           @retry="handleRetry"
         />
       </div>
@@ -237,7 +267,7 @@ const handleBackToTemplate = () => {
         </template>
         <template v-else>
           <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-          <p class="error-message">结果获取失败，请返回重试</p>
+          <p class="error-message">{{ errorMessage || '结果获取失败，请返回重试' }}</p>
         </template>
         <div class="error-actions">
           <button class="btn-retry" @click="handleRetry">重新生成</button>

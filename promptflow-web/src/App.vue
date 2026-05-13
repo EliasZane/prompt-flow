@@ -5,6 +5,27 @@ import HomeView from './views/home/index.vue'
 import TemplateDetailView from './views/template/detail.vue'
 import HistoryView from './views/history/index.vue'
 import ResultView from './views/result/index.vue'
+import LoginView from './views/auth/Login.vue'
+import RegisterView from './views/auth/Register.vue'
+import PersonalCenterView from './views/user/PersonalCenter.vue'
+import Notification from './components/Notification.vue'
+import { useNotification } from './composables/useNotification'
+import { getUserInfo } from './api/user'
+import userStore from './stores/userStore'
+
+const { message, type, isVisible, showNotification } = useNotification()
+
+// 状态同步
+const syncUserInfo = async () => {
+  if (userStore.state.isLoggedIn) {
+    try {
+      const info = await getUserInfo()
+      userStore.updateUserInfo(info.username, info.remainingCount, info.totalUsedCount)
+    } catch (error) {
+      console.error('同步用户信息失败:', error)
+    }
+  }
+}
 
 // V1 简单模拟路由
 const currentPath = ref('/')
@@ -31,12 +52,22 @@ const handleNavigate = (e: Event) => {
   }
 }
 
+const handleGlobalNotification = (e: Event) => {
+  const customEvent = e as CustomEvent
+  if (customEvent.detail && customEvent.detail.message) {
+    showNotification(customEvent.detail.message, customEvent.detail.type || 'info')
+  }
+}
+
 onMounted(() => {
   window.addEventListener('navigate', handleNavigate)
+  window.addEventListener('notification', handleGlobalNotification)
+  syncUserInfo() // 初始化同步用户信息
 })
 
 onUnmounted(() => {
   window.removeEventListener('navigate', handleNavigate)
+  window.removeEventListener('notification', handleGlobalNotification)
 })
 </script>
 
@@ -46,8 +77,12 @@ onUnmounted(() => {
     <TemplateDetailView v-else-if="currentPath === '/template/detail'" :template-code="currentParams.templateCode" />
     <HistoryView v-else-if="currentPath === '/history'" />
     <ResultView v-else-if="currentPath === '/result'" :params="currentParams" />
+    <LoginView v-else-if="currentPath === '/login'" />
+    <RegisterView v-else-if="currentPath === '/register'" />
+    <PersonalCenterView v-else-if="currentPath === '/personal-center'" :params="currentParams" />
     <div v-else>
       <h2>页面未找到</h2>
     </div>
+    <Notification :message="message" :type="type" :is-visible="isVisible" />
   </DefaultLayout>
 </template>

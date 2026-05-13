@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.promptflow.user.mapper.UsageRecordMapper">
+    <resultMap id="BaseResultMap" type="com.promptflow.user.model.entity.UsageRecordEntity">
+        <id column="id" property="id" />
+        <result column="order_no" property="orderNo" />
+        <result column="user_id" property="userId" />
+        <result column="run_id" property="runId" />
+        <result column="change_count" property="changeCount" />
+        <result column="balance_after" property="balanceAfter" />
+        <result column="change_type" property="changeType" />
+        <result column="remark" property="remark" />
+        <result column="created_at" property="createdAt" />
+    </resultMap>
+</mapper>

@@ -3,6 +3,8 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:classpath:secrets.txt
   # 数据源配置
   datasource:
     url: jdbc:mysql://localhost:3306/promptflow?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -16,9 +18,44 @@ spring:
 # AI 外部接口配置
 ai:
   deepseek:
-    api-key: ${DEEPSEEK_API_KEY:}
+    api-key: ${ai.deepseek.api-key}
     base-url: https://api.deepseek.com
     model: deepseek-chat
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: https://api.openai.com/v1
+    model: gpt-4o-mini
+
+logging:
+  level:
+    com.promptflow: DEBUG
+
+jwt:
+  secret: ${jwt.secret}
+  expiration: 604800 # 7 days (in seconds)
+
+# 阿里云短信配置
+aliyun:
+  sms:
+    access-key-id: ${aliyun.sms.access-key-id}
+    access-key-secret: ${aliyun.sms.access-key-secret}
+    endpoint: dysmsapi.aliyuncs.com
+    region: cn-hangzhou
+    sign-name: 速通互联验证码
+    template-code: 100001
+
+# 支付宝配置
+pay:
+  alipay:
+    server-url: https://openapi.alipay.com/gateway.do
+    app-id: ${pay.alipay.app-id}
+    private-key: ${pay.alipay.private-key}
+    alipay-public-key: ${pay.alipay.alipay-public-key}
+    notify-url: https://promptflowai.cn/api/membership/pay/notify/alipay
+    return-url: https://promptflowai.cn/personal-center?tab=recharge
+    sign-type: RSA2
+    charset: UTF-8
+    format: json
 
 mybatis-plus:
   configuration:

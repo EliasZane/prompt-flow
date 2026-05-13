@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.promptflow.user.mapper.PaymentTransactionMapper">
+    <resultMap id="BaseResultMap" type="com.promptflow.user.model.entity.PaymentTransactionEntity">
+        <id column="id" property="id" />
+        <result column="order_no" property="orderNo" />
+        <result column="pay_channel" property="payChannel" />
+        <result column="pay_scene" property="payScene" />
+        <result column="out_trade_no" property="outTradeNo" />
+        <result column="third_trade_no" property="thirdTradeNo" />
+        <result column="trade_status" property="tradeStatus" />
+        <result column="pay_amount" property="payAmount" />
+        <result column="notify_data" property="notifyData" />
+        <result column="notify_count" property="notifyCount" />
+        <result column="notify_time" property="notifyTime" />
+        <result column="paid_at" property="paidAt" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+</mapper>

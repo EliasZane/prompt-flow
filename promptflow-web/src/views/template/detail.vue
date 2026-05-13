@@ -3,6 +3,8 @@ import { ref, onMounted } from 'vue'
 import DynamicForm from '../../components/DynamicForm.vue'
 import type { TemplateDetail } from '../../types/template'
 import { getTemplateDetail } from '../../api/template'
+import { useNotification } from '../../composables/useNotification'
+import userStore from '../../stores/userStore'
 
 const props = defineProps<{
   templateCode: string
@@ -12,6 +14,7 @@ const props = defineProps<{
 const loading = ref(true)
 const isGenerating = ref(false)
 const templateData = ref<TemplateDetail | null>(null)
+const { showNotification } = useNotification()
 
 // 获取模板详情
 const fetchDetail = async () => {
@@ -47,6 +50,7 @@ const fetchDetail = async () => {
     templateData.value = data
   } catch (error) {
     console.error('获取模板详情失败:', error)
+    showNotification('获取模板详情失败！', 'error')
   } finally {
     loading.value = false
   }
@@ -59,6 +63,20 @@ onMounted(() => {
 const handleFormSubmit = async (formData: Record<string, any>) => {
   if (!templateData.value) return
   
+  // 检查用户是否登录
+  if (!userStore.state.isLoggedIn) {
+    showNotification('请先登录才能生成AI提示词！', 'warning')
+    window.dispatchEvent(new CustomEvent('navigate', { detail: { path: '/login' } }))
+    return
+  }
+
+  // 检查次数
+  if (userStore.state.remainingCount <= 0) {
+    showNotification('生成次数已用完，请充值！', 'warning')
+    window.dispatchEvent(new CustomEvent('navigate', { detail: { path: '/personal-center', tab: 'recharge' } }))
+    return
+  }
+
   // V1：立即跳转到结果页，将输入参数带过去
   window.dispatchEvent(new CustomEvent('navigate', { 
     detail: { 

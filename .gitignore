@@ -7,6 +7,10 @@ logs/
 *.log
 .trae/
 docs/
+deploy/systemd/
+resources/application-prod.yml
+secrets.txt
+**/src/main/resources/secrets.txt
 
 ### STS ###
 .apt_generated

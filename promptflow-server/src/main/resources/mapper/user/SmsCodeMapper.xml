@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.promptflow.user.mapper.SmsCodeMapper">
+    <resultMap id="BaseResultMap" type="com.promptflow.user.model.entity.SmsCodeEntity">
+        <id column="id" property="id" />
+        <result column="phone" property="phone" />
+        <result column="code" property="code" />
+        <result column="scene" property="scene" />
+        <result column="used" property="used" />
+        <result column="expire_time" property="expireTime" />
+        <result column="created_at" property="createdAt" />
+        <result column="ip" property="ip" />
+    </resultMap>
+</mapper>

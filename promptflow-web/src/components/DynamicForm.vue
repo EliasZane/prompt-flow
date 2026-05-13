@@ -19,10 +19,16 @@ const errors = ref<Record<string, string>>({})
 const initForm = () => {
   const data: Record<string, any> = {}
   props.fields.forEach(field => {
-    if (field.componentType === 'tags' || field.componentType === 'tag') {
-      data[field.fieldKey] = field.defaultValue || []
+    const isMultiple = field.multiple === true || String(field.multiple) === 'true'
+    
+    if (field.defaultValue !== undefined && field.defaultValue !== null) {
+      data[field.fieldKey] = field.defaultValue
+    } else if (field.componentType === 'tags' || field.componentType === 'tag') {
+      data[field.fieldKey] = isMultiple ? [] : ''
+    } else if (field.componentType === 'slider') {
+      data[field.fieldKey] = field.min || 0
     } else {
-      data[field.fieldKey] = field.defaultValue || ''
+      data[field.fieldKey] = ''
     }
   })
   formData.value = data
@@ -72,13 +78,35 @@ const handleSubmit = () => {
   }
 }
 
-const toggleTag = (fieldKey: string, value: string) => {
-  const current = formData.value[fieldKey] || []
+const toggleTag = (field: FormField, value: string) => {
+  const fieldKey = field.fieldKey
+  // 显式转换类型以防万一
+  const isMultiple = field.multiple === true || String(field.multiple) === 'true'
+  const max = field.maxSelect ? Number(field.maxSelect) : 0
+  
+  // 单选互斥逻辑
+  if (!isMultiple) {
+    formData.value[fieldKey] = formData.value[fieldKey] === value ? '' : value
+    if (errors.value[fieldKey]) {
+      errors.value[fieldKey] = ''
+    }
+    return
+  }
+
+  // 多选互斥逻辑
+  let current = Array.isArray(formData.value[fieldKey]) ? [...formData.value[fieldKey]] : []
+  
   if (current.includes(value)) {
     formData.value[fieldKey] = current.filter((item: string) => item !== value)
   } else {
-    formData.value[fieldKey] = [...current, value]
+    // 如果达到最大选择数，移除最早选择的一个（互斥替换）
+    if (max > 0 && current.length >= max) {
+      current.shift()
+    }
+    current.push(value)
+    formData.value[fieldKey] = current
   }
+  
   if (errors.value[fieldKey]) {
     errors.value[fieldKey] = ''
   }
@@ -98,12 +126,10 @@ const toggleTag = (fieldKey: string, value: string) => {
         <span v-if="field.icon" class="field-icon" v-html="field.icon"></span>
         <span v-if="field.required" class="required-star">*</span>
         {{ field.label }}
-        <span v-if="field.fieldKey === 'tempo'" class="tempo-value">
-          <span class="value">{{ formData[field.fieldKey] || 120 }}</span>
-          <span class="unit">BPM 参考</span>
+        <span v-if="field.componentType === 'slider'" class="tempo-value">
+          <span class="value">{{ formData[field.fieldKey] }}</span>
+          <span class="unit">{{ field.unit || 'BPM' }}</span>
         </span>
-        <span v-if="field.fieldKey === 'emotion'" class="optional-tag">可选</span>
-        <span v-if="field.fieldKey === 'extraInfo'" class="optional-tag">选填</span>
       </label>
 
       <!-- Input -->
@@ -112,34 +138,26 @@ const toggleTag = (fieldKey: string, value: string) => {
           v-model="formData[field.fieldKey]" 
           type="text" 
           class="form-control"
-          :placeholder="field.placeholder || `例如：周杰伦 - 晴天`"
+          :placeholder="field.placeholder"
           :disabled="isGenerating"
           @input="errors[field.fieldKey] = ''"
         />
       </template>
 
-      <!-- Slider (Special for BPM) -->
+      <!-- Slider -->
       <template v-else-if="field.componentType === 'slider'">
         <div class="slider-container">
-          <div class="slider-labels">
-            <span>慢板</span>
-            <span>快板</span>
-          </div>
           <input 
             type="range" 
-            v-model="formData[field.fieldKey]" 
-            :min="field.min || 40" 
-            :max="field.max || 200" 
-            step="1"
+            v-model.number="formData[field.fieldKey]" 
+            :min="field.min" 
+            :max="field.max" 
+            :step="field.step || 1"
             class="range-slider"
             :disabled="isGenerating"
           />
-          <div class="slider-ticks">
-            <span>40</span>
-            <span>80</span>
-            <span>120</span>
-            <span>160</span>
-            <span>200</span>
+          <div v-if="field.marks" class="slider-ticks">
+            <span v-for="mark in field.marks" :key="mark.value">{{ mark.label }}</span>
           </div>
         </div>
       </template>
@@ -151,7 +169,7 @@ const toggleTag = (fieldKey: string, value: string) => {
             v-model="formData[field.fieldKey]" 
             class="form-control"
             rows="4"
-            :placeholder="field.placeholder || `补充任何特殊要求，例如：需要加入中国传统乐器、避免使用某些和弦...`"
+            :placeholder="field.placeholder"
             :disabled="isGenerating"
             maxlength="500"
             @input="errors[field.fieldKey] = ''"
@@ -160,7 +178,7 @@ const toggleTag = (fieldKey: string, value: string) => {
         </div>
       </template>
 
-      <!-- Select / Radio (Language Selection) -->
+      <!-- Select / Radio -->
       <template v-else-if="field.componentType === 'select' || field.componentType === 'radio'">
         <div class="radio-group-modern">
           <label 
@@ -182,7 +200,7 @@ const toggleTag = (fieldKey: string, value: string) => {
         </div>
       </template>
 
-      <!-- Tags (Multi-select) -->
+      <!-- Tags -->
       <template v-else-if="field.componentType === 'tags' || field.componentType === 'tag'">
         <div class="tags-group">
           <button 
@@ -191,11 +209,11 @@ const toggleTag = (fieldKey: string, value: string) => {
             type="button"
             class="tag-btn"
             :class="{ 
-              active: (formData[field.fieldKey] || []).includes(opt.value) || formData[field.fieldKey] === opt.value,
+              active: (field.multiple === true || String(field.multiple) === 'true') ? (formData[field.fieldKey] || []).includes(opt.value) : formData[field.fieldKey] === opt.value,
               disabled: isGenerating
             }"
             :disabled="isGenerating"
-            @click="toggleTag(field.fieldKey, opt.value)"
+            @click="toggleTag(field, opt.value)"
           >
             {{ opt.label }}
           </button>

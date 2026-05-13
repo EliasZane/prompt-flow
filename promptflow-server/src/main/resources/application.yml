@@ -21,6 +21,8 @@ server:
       min-spare: 100
 # Spring 配置
 spring:
+  config:
+    import: optional:classpath:secrets.txt
   application:
     name: prompt-flow
   # 编码配置
@@ -47,7 +49,7 @@ spring:
 # AI 外部接口配置
 ai:
   deepseek:
-    api-key: ${DEEPSEEK_API_KEY:}
+    api-key: ${ai.deepseek.api-key}
     base-url: https://api.deepseek.com
     model: deepseek-chat
   openai:
@@ -61,3 +63,34 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+logging:
+  level:
+    com.promptflow: DEBUG
+
+jwt:
+  secret: ${jwt.secret}
+  expiration: 604800 # 7 days (in seconds)
+
+# 阿里云短信配置
+aliyun:
+  sms:
+    access-key-id: ${aliyun.sms.access-key-id}
+    access-key-secret: ${aliyun.sms.access-key-secret}
+    endpoint: dysmsapi.aliyuncs.com
+    region: cn-hangzhou
+    sign-name: 速通互联验证码
+    template-code: 100001
+
+# 支付宝配置
+pay:
+  alipay:
+    server-url: https://openapi.alipay.com/gateway.do
+    app-id: ${pay.alipay.app-id}
+    private-key: ${pay.alipay.private-key}
+    alipay-public-key: ${pay.alipay.alipay-public-key}
+    notify-url: https://promptflowai.cn/api/membership/pay/notify/alipay
+    return-url: https://promptflowai.cn/personal-center?tab=recharge
+    sign-type: RSA2
+    charset: UTF-8
+    format: json

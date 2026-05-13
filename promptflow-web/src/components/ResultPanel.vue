@@ -21,9 +21,13 @@ interface ResultData {
   prompt?: string | PromptObject
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   content?: ResultData | any
-}>()
+  inputData?: Record<string, any>
+  showStatus?: boolean
+}>(), {
+  showStatus: true
+})
 
 const emit = defineEmits<{
   (e: 'retry'): void
@@ -31,6 +35,42 @@ const emit = defineEmits<{
 
 const isExpanded = ref(false)
 const copiedField = ref<string | null>(null)
+
+// 格式化输入数据
+const formattedInput = computed(() => {
+  if (!props.inputData) return []
+  
+  const labels: Record<string, string> = {
+    'originalSong': '原曲名称',
+    'songName': '歌曲名称',
+    'style': '目标风格',
+    'mood': '情绪',
+    'vocal': '人声要求',
+    'artist': '艺人/声线',
+    'instrument': '乐器编排',
+    'customPrompt': '自定义要求',
+    'lyrics': '歌词文本',
+    'tempo': 'BPM/节奏',
+    'language': '语言',
+    'extraRemark': '额外备注'
+  }
+  
+  return Object.entries(props.inputData)
+    .filter(([_, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => {
+      let displayValue = value
+      if (Array.isArray(value)) {
+        displayValue = value.join(', ')
+      } else if (typeof value === 'object') {
+        displayValue = JSON.stringify(value)
+      }
+      
+      return {
+        label: labels[key] || key,
+        value: displayValue
+      }
+    })
+})
 
 // 数据解析
 const result = computed<ResultData>(() => {
@@ -70,15 +110,31 @@ const styleDetails = computed(() => {
     }))
 })
 
-// 复制功能
-const copyToClipboard = (text: string, fieldId: string) => {
+const copyToClipboard = async (text: string, fieldId: string) => {
   if (!text) return
-  navigator.clipboard.writeText(text).then(() => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      textArea.style.top = '0'
+      textArea.style.opacity = '0'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+    }
     copiedField.value = fieldId
     setTimeout(() => {
       copiedField.value = null
     }, 2000)
-  })
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 const copyAllTags = () => {
@@ -103,7 +159,7 @@ const downloadPrompt = () => {
 <template>
   <div class="result-panel-v2">
     <!-- 1. 顶部状态区 -->
-    <header class="status-section">
+    <header v-if="showStatus" class="status-section">
       <div class="status-info">
         <h1 class="status-title">
           <span class="status-icon">
@@ -122,6 +178,17 @@ const downloadPrompt = () => {
     </header>
 
     <div class="panel-layout">
+      <!-- 0. 输入参数预览 -->
+      <section v-if="formattedInput.length > 0" class="result-card input-preview-card">
+        <h2 class="card-title">📝 输入参数</h2>
+        <div class="input-tags">
+          <div v-for="item in formattedInput" :key="item.label" class="input-tag-item">
+            <span class="input-tag-label">{{ item.label }}：</span>
+            <span class="input-tag-value">{{ item.value }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- 2. 核心结果卡 -->
       <section class="result-card main-card">
         <h2 class="card-title">🎬 内容方案</h2>
@@ -328,6 +395,55 @@ const downloadPrompt = () => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+/* 输入参数预览卡 */
+.input-preview-card {
+  padding: 24px 32px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-style: dashed;
+  border-radius: 24px;
+  gap: 16px;
+}
+
+.input-preview-card .card-title {
+  font-size: 16px;
+  color: #475569;
+}
+
+.input-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.input-tag-item {
+  background: #ffffff;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s;
+}
+
+.input-tag-item:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.input-tag-label {
+  color: #94a3b8;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.input-tag-value {
+  color: #1e293b;
+  font-weight: 700;
 }
 
 /* 核心结果卡 */
